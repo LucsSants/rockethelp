@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HStack, IconButton, VStack, useTheme, Text, Heading, FlatList, Center } from 'native-base';
+
+import auth from '@react-native-firebase/auth'
+import firestore from '@react-native-firebase/firestore'
+
 import {useNavigation} from '@react-navigation/native'
 
 import { SignOut, ChatTeardropText} from 'phosphor-react-native'
@@ -9,18 +13,15 @@ import Logo from '../assets/logo_secondary.svg'
 import { Filter } from '../components/Filter';
 import { Order, ORderProps } from '../components/Order';
 import { Button } from '../components/Button';
+import { Alert } from 'react-native';
+import { dateFormat } from '../utils/firestoreDateFormat';
+import { isLoading } from 'expo-font';
+import { Loading } from '../components/Loading';
 
 export function Home() {
+  const [isLoading, setIsLoading] = useState(true)
   const [statusSelected, setStatusSelected] = useState<'open' | 'closed'>('open')
-  const [orders, setOrders] = useState<ORderProps[]>([
-    {
-      id:'123',
-      patrimony:'123456',
-      when:'18/07/2022 às 14:00',
-      status: 'open'
-
-    }
-  ])
+  const [orders, setOrders] = useState<ORderProps[]>([])
 
   const {colors} = useTheme()
 
@@ -34,6 +35,40 @@ export function Home() {
   function handleOpenDetails( orderId: string) {
     navigation.navigate('details', {orderId})
   }
+
+  function handleLogout() {
+    auth()
+    .signOut()
+    .catch((error)=> {
+      console.log(error)
+      Alert.alert('Sair', 'Não foi possível sair.')
+    })
+  }
+
+  useEffect(()=>{
+    setIsLoading(true)
+
+    const subscriber = firestore()
+    .collection('orders')
+    .where('status', '==', statusSelected)
+    .onSnapshot(snapshot => {
+      const data = snapshot.docs.map(doc => {
+        const {patrimony, description, status, created_at} = doc.data()
+
+        return {
+          id: doc.id,
+          patrimony,
+          description,
+          status,
+          when: dateFormat(created_at)
+        }
+      });
+      setOrders(data)
+      setIsLoading(false)
+    })
+
+    return subscriber;
+  },[statusSelected])
 
   return (
     <VStack flex={1} pb={6} bg="gray.700">
@@ -53,6 +88,7 @@ export function Home() {
         _pressed={{
           bg:"gray.700"
         }}
+        onPress={handleLogout}
         />
 
       </HStack>
@@ -60,10 +96,10 @@ export function Home() {
       <VStack flex={1} px={6}>
         <HStack w="full" mt={8} mb={4} justifyContent="space-between" alignItems="center">
           <Heading color="gray.100">
-            Meus chamados
+            Solicitações
           </Heading>
           <Text color="gray.200">
-            3
+            {orders.length}
           </Text>
         </HStack>
 
@@ -83,6 +119,7 @@ export function Home() {
           />
         </HStack>
 
+       { isLoading ? <Loading/> :
         <FlatList
           data={orders}
           keyExtractor={item => item.id}
@@ -100,7 +137,7 @@ export function Home() {
                 </Text>
             </Center>
           )}
-        />
+        />}
 
 
       <Button title='Nova Solicitação' onPress={handleNewOrder}/>
